@@ -45,9 +45,11 @@ def send(text, reply_markup=None):
         import json
         payload["reply_markup"] = json.dumps(reply_markup)
     try:
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=payload, timeout=15)
+        r = requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=payload, timeout=15)
+        if r.status_code != 200:
+            print(f"❌ خطای تلگرام: {r.text}")
     except Exception as e:
-        log.error(f"telegram send failed: {type(e).__name__}")
+        print(f"❌ خطای شبکه در تلگرام: {e}")
 
 def send_log(lines):
     try:
