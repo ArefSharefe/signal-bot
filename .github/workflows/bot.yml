@@ -2,11 +2,11 @@ name: Signal Bot
 
 on:
   schedule:
-    - cron: '2,17,32,47 * * * *'   # 15m
-    - cron: '2 * * * *'             # 1h
-    - cron: '2 */4 * * *'           # 4h
-    - cron: '2 0 * * *'             # 1d
-  workflow_dispatch:                # برای اجرای دستی
+    - cron: '2,17,32,47 * * * *'
+    - cron: '2 * * * *'
+    - cron: '2 */4 * * *'
+    - cron: '2 0 * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -29,15 +29,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # دانلود دیتابیس (با continue-on-error که خطا نده)
+      # ✅ راه‌حل نهایی: استفاده از gh برای دانلود بدون خطا
       - name: Download previous database
-        uses: actions/download-artifact@v4
-        with:
-          name: signals-db
-          path: .
-        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download -n signals-db --dir . || true
 
-      # اجرای اسکن بر اساس زمان‌بندی یا اجرای دستی
       - name: Run scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -52,11 +50,10 @@ jobs:
           elif [[ "${{ github.event.schedule }}" == "2 0 * * *" ]]; then
             python -c "import signals; signals.main_1d()"
           else
-            echo "اجرای دستی - به عنوان تست، اسکن 4 ساعته را اجرا می‌کنیم"
+            echo "Manual run: testing 4h scan"
             python -c "import signals; signals.main_4h()"
           fi
 
-      # آپلود دیتابیس (فقط اگه واقعا ساخته شده باشه)
       - name: Upload database
         if: always() && hashFiles('signals.db') != ''
         uses: actions/upload-artifact@v4
