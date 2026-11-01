@@ -2,11 +2,11 @@ name: Signal Bot
 
 on:
   schedule:
-    - cron: '2,17,32,47 * * * *'
-    - cron: '2 * * * *'
-    - cron: '2 */4 * * *'
-    - cron: '2 0 * * *'
-  workflow_dispatch:
+    - cron: '2,17,32,47 * * * *'   # 15m
+    - cron: '2 * * * *'             # 1h
+    - cron: '2 */4 * * *'           # 4h
+    - cron: '2 0 * * *'             # 1d
+  workflow_dispatch:                # برای اجرای دستی
 
 jobs:
   run-bot:
@@ -29,13 +29,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ راه‌حل نهایی: استفاده از gh برای دانلود بدون خطا
+      # دانلود دیتابیس با استفاده از gh برای جلوگیری از خطای قرمز
       - name: Download previous database
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh run download -n signals-db --dir . || true
 
+      # اجرای اسکن بر اساس زمان‌بندی
       - name: Run scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
