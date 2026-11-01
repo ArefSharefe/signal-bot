@@ -28,7 +28,7 @@ USE_1D_ALIGN = True
 LINE = "━━━━━━━━━━━━━━"
 IRAN = timedelta(hours=3, minutes=30)
 
-# ✅ این بخش جا افتاده بود، این رو اضافه کن:
+# ✅ دیکشنری ترجمه وضعیت بازار
 STATE_FA = {
     "UP": "صعودی (فقط لانگ)",
     "DOWN": "نزولی (فقط شورت)",
@@ -149,38 +149,55 @@ def check_open_signals():
     return closed
 
 def run_scan(timeframe):
+    print(f"🚀 شروع اسکن برای {timeframe}...")
     db.init()
     closed = check_open_signals()
 
+    print("⏳ در حال دریافت وضعیت بازار...")
     try:
         state, info = market.market_state()
+        print(f"✅ وضعیت بازار: {state}")
     except Exception as e:
-        log.error(f"Market check failed: {type(e).__name__}")
+        err_msg = f"⚠️ خطا در وضعیت بازار: {type(e).__name__} - {e}"
+        print(err_msg)
+        log.error(err_msg)
+        send_log(header() + [err_msg] + [LINE])
         return
 
-    log.info(f"Market: {state} ({info})")
     market_line = f"📈 وضعیت بازار: {STATE_FA.get(state, state)}"
-
     open_rows = db.get_open()
     skip = {r["symbol"] for r in open_rows}
-    counts = {"LONG": 0, "SHORT": 0}
-    for r in open_rows:
-        counts[r["side"]] += 1
     slots = MAX_OPEN - len(open_rows)
 
-    if state == "VOLATILE" or slots <= 0:
+    if state == "VOLATILE":
+        print("⛔ بازار نوسان شدید دارد.")
+        send_log(header() + [market_line, "⛔ نوسان بازار شدید است، اسکن انجام نشد."] + [LINE])
         return
 
+    if slots <= 0:
+        print("⏸ ظرفیت سیگنال‌ها پر است.")
+        send_log(header() + [market_line, "⏸ ظرفیت سیگنال‌های باز پر است."] + [LINE])
+        return
+
+    print("📡 در حال دریافت قیمت‌های لحظه‌ای...")
     try:
         tickers = fetch_with_retry(exchange.fetch_tickers)
+        print("✅ قیمت‌ها دریافت شد.")
     except Exception as e:
-        log.error(f"Ticker fetch failed: {type(e).__name__}")
+        err_msg = f"⚠️ خطا در دریافت قیمت: {type(e).__name__}"
+        print(err_msg)
+        log.error(err_msg)
+        send_log(header() + [market_line, err_msg] + [LINE])
         return
 
     stats = {"scanned": 0, "raw": 0, "market": 0, "drift": 0, "stop": 0, "score": 0, "cooldown": 0, "1d": 0}
     signals = []
-
-    for symbol in get_symbols():
+    
+    print("🔍 در حال دریافت لیست نمادها...")
+    symbols = get_symbols()
+    print(f"✅ تعداد ارزهای یافت‌شده: {len(symbols)}")
+    
+    for symbol in symbols:
         if symbol in skip or db.recently_signaled(symbol, timeframe, hours=COOLDOWN_HOURS):
             stats["cooldown"] += 1
             continue
@@ -227,30 +244,18 @@ def run_scan(timeframe):
 
     for s in chosen:
         db.save_signal(s)
-        counts[s["side"]] += 1
         icon = "🟢" if s["side"] == "LONG" else "🔴"
         send(f"{icon} {s['side']} {s['symbol']} ({s['timeframe']})\nامتیاز: {s['score']}/100\nاهرم: {s['leverage']}x\nاستراتژی: {s['strategy']}\nورود: {s['entry']:.6g}\nاستاپ: {s['stop']:.6g} ({s['stop_pct']:.1f}%)\nتی‌پی: {s['tp']:.6g} ({s['tp_pct']:.1f}%)\n⚠️ آزمایشی")
 
-    send_log(header() + [market_line, f"🔍 اسکن {timeframe}: {stats['scanned']} ارز", f"✅ سیگنال جدید: {len(chosen)}", closed_line(closed)] + [LINE])
+    print(f"🏁 اسکن تمام شد. سیگنال جدید: {len(chosen)}")
+    send_log(header() + [
+        market_line, 
+        f"🔍 اسکن {timeframe}: {stats['scanned']} ارز", 
+        f"✅ سیگنال جدید: {len(chosen)}", 
+        closed_line(closed)
+    ] + [LINE])
 
-def main_4h():
-    run_scan("4h")
-
-def main_1h():
-    run_scan("1h")
-
-def main_15m():
-    run_scan("15m")
-
-def main_1d():
-    run_scan("1d")
-
-def send_startup_message():
-    msg = "🚀 ربات با موفقیت راه‌اندازی شد.\n"
-    msg += f"🕐 زمان: {iran_now():%H:%M} (ایران)\n"
-    msg += "📊 تایم‌فریم‌های فعال: 15m, 1h, 4h, 1d\n"
-    msg += "✅ آماده دریافت سیگنال‌ها."
-    send(msg)
-
-if __name__ == "__main__":
-    main_4h() # پیش‌فرض
+def main_4h(): run_scan("4h")
+def main_1h(): run_scan("1h")
+def main_15m(): run_scan("15m")
+def main_1d(): run_scan("1d")
