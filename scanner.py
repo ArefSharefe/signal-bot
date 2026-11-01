@@ -5,9 +5,10 @@ import numpy as np
 import pandas_ta as ta
 from ccxt.base.errors import NetworkError, RateLimitExceeded
 
-exchange = ccxt.bybit({
+# ✅ تغییر صرافی از Bybit به KuCoin
+exchange = ccxt.kucoin({
     "enableRateLimit": True,
-    "options": {"defaultType": "swap"},
+    "options": {"defaultType": "swap"}, # برای معاملات فیوچرز
 })
 
 MIN_VOLUME_USDT = 3_000_000
