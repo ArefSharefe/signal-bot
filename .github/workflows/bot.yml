@@ -1,0 +1,63 @@
+name: Signal Bot
+
+on:
+  schedule:
+    - cron: '2,17,32,47 * * * *'   # اسکن 15 دقیقه
+    - cron: '2 * * * *'             # اسکن 1 ساعته
+    - cron: '2 */4 * * *'           # اسکن 4 ساعته
+    - cron: '2 0 * * *'             # اسکن 1 روزه
+  workflow_dispatch:                # برای اینکه بتونی دستی هم اجراش کنی
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: signal-bot-${{ github.workflow }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # دانلود دیتابیس قبلی برای اینکه سیگنال‌های باز رو یادش بمونه
+      - name: Download previous database
+        uses: actions/download-artifact@v4
+        with:
+          name: signals-db
+          path: .
+        continue-on-error: true
+
+      # اجرای اسکن بر اساس زمان‌بندی
+      - name: Run scanner
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          if [[ "${{ github.event.schedule }}" == "2,17,32,47 * * * *" ]]; then
+            python -c "import signals; signals.main_15m()"
+          elif [[ "${{ github.event.schedule }}" == "2 * * * *" ]]; then
+            python -c "import signals; signals.main_1h()"
+          elif [[ "${{ github.event.schedule }}" == "2 */4 * * *" ]]; then
+            python -c "import signals; signals.main_4h()"
+          elif [[ "${{ github.event.schedule }}" == "2 0 * * *" ]]; then
+            python -c "import signals; signals.main_1d()"
+          fi
+
+      # آپلود دیتابیس برای اجرای بعدی
+      - name: Upload database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signals-db
+          path: signals.db
+          retention-days: 90
